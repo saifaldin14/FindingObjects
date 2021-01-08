@@ -3,6 +3,9 @@ import cv2 as cv
 from typing import Tuple, Optional, List, Sequence
 Point = Tuple[float, float]
 
+class Outlier(Exception):
+    pass
+
 class FeatureMatching:
     def __init__(self, train_image: str = "train.png") -> None:
         self.f_extractor = cv.xfeatures2d_SURF.create(hessianThreshold=400)
@@ -37,6 +40,55 @@ class FeatureMatching:
                         for good_match in good_matches]
         query_points = [key_query[good_match.trainIdx].pt
                         for good_match in good_matches]
+
+        try:
+            if len(good_matches) < 4:
+                raise Outlier("Too few matches")
+
+            dst_corners = detect_corner_points(train_points, query_points, self.sh_train)
+            if np.any((dst_corners < -20) |
+                      (dst_corners > np.array(sh_query) + 20)):
+                raise Outlier("Out of Image")
+
+            area = 0
+            for prev, nxt in zip(dst_corners, np.roll(
+                    dst_corners, -1, axis=0)):
+                area += (prev[0] * nxt[1] - prev[1] * nxt[0]) / 2.
+
+            if not np.prod(sh_query) / 16. < area < np.prod(sh_query) / 2.:
+                raise Outlier("Area is unreasonably small or large")
+
+            train_points_scaled = self.scale_and_offset(
+                train_points, self.sh_train, sh_query)
+            Hinv, _ = cv.findHomography(np.array(query_points),
+                                        np.array(train_points_scaled),
+                                        cv.RANSAC)
+            similar = np.linalg.norm(Hinv - self.last_hinv) < self.max_error_hinv
+            recent = self.num_frames_no_success < self.max_frames_no_success
+            if recent and not similar:
+                raise Outlier("Not similar transformation")
+        except Outlier as e:
+            self.num_frames_no_success += 1
+            return False, None, None
+        else:
+            self.num_frames_no_success = 0
+            self.last_h = Hinv
+
+            img_warped = cv.warpPerspective(img_query,
+                                            Hinv,
+                                            (sh_query[1], sh_query[0]))
+            img_flann = draw_good_matches(self.img_obj,
+                                          self.key_train,
+                                          img_query,
+                                          key_query,
+                                          good_matches)
+            dst_corners[:, 0] += self.sh_train[1]
+            cv.polylines(img_flann,
+                         [dst_corners.astype(np.int)],
+                         isClosed=True,
+                         color=(0, 255, 0),
+                         thickness=3)
+            return True, img_warped, img_flann
 
     def match_features(self, desc_frame: np.ndarray) -> List[cv.DMatch]:
         matches = self.flann.knnMatch(self.desc_train, desc_frame, k=2)
