@@ -68,6 +68,7 @@ class FeatureMatching:
             if recent and not similar:
                 raise Outlier("Not similar transformation")
         except Outlier as e:
+            print(f"Outlier:{e}")
             self.num_frames_no_success += 1
             return False, None, None
         else:
