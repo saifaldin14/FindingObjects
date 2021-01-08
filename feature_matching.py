@@ -44,6 +44,16 @@ class FeatureMatching:
                         if x[0].distance < 0.7 * x[1].distance]
         return good_matches
 
+    @staticmethod
+    def scale_and_offset(points: Sequence[Point],
+                         source_size: Tuple[int, int],
+                         dst_size: Tuple[int, int],
+                         factor: float = 0.5) -> List[Point]:
+        dst_size = np.array(dst_size)
+        scale = 1 / np.array(source_size) * dst_size * factor
+        bias = dst_size * (1 - factor) / 2
+        return [tuple(np.array(pt) * scale + bias) for pt in points]
+
 def detect_corner_points(src_points: Sequence[Point],
                          dst_points: Sequence[Point],
                          sh_src: Tuple[int, int]) -> np.ndarray:
