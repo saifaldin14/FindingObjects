@@ -31,7 +31,8 @@ class FeatureMatching:
         of interest
         """
         # initialize SURF
-        self.f_extractor = cv2.xfeatures2d_SURF.create(hessianThreshold=400)
+        #self.f_extractor = cv2.xfeatures2d_SURF.create(hessianThreshold=400)
+        self.f_extractor = cv2.ORB.create(edgeThreshold=400)
         self.img_obj = train_image
 
         self.sh_train = self.img_obj.shape[:2]
